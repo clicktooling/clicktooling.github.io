@@ -8,6 +8,24 @@ h1, h2, h3, h4, h5, h6 {
     color: #0d6efd;
 }
 
+/* Custom Title Styling */
+h1.report-title-custom {
+    color: #FF5722 !important; /* Safety Orange */
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.report-title-custom .fa-wrench {
+    margin-left: 10px;
+    animation: wrench-wiggle 2s ease-in-out infinite;
+}
+
+@keyframes wrench-wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-20deg); }
+    75% { transform: rotate(20deg); }
+}
+
 .card {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     margin-bottom: 2rem;

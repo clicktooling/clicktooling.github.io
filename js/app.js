@@ -349,22 +349,72 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Custom confirmation modal for reset form
+    function showResetConfirmation() {
+        // Create modal elements if they don't exist
+        let resetModal = document.getElementById('resetConfirmModal');
+        
+        if (!resetModal) {
+            resetModal = document.createElement('div');
+            resetModal.id = 'resetConfirmModal';
+            resetModal.className = 'modal fade';
+            resetModal.setAttribute('tabindex', '-1');
+            resetModal.setAttribute('aria-labelledby', 'resetConfirmModalLabel');
+            resetModal.setAttribute('aria-hidden', 'true');
+            
+            resetModal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning">
+                            <h5 class="modal-title" id="resetConfirmModalLabel">Confirm Reset</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-exclamation-triangle text-warning me-3" style="font-size: 2rem;"></i>
+                                <p class="mb-0">Are you sure you want to reset the form?<br><strong>All entered data will be lost.</strong></p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-danger" id="confirmResetBtn">Yes, Reset Form</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(resetModal);
+            
+            // Add event listener to the confirm button
+            document.getElementById('confirmResetBtn').addEventListener('click', function() {
+                // Reset the form
+                document.getElementById('hydroTestForm').reset();
+                
+                // Reset date and time to current
+                document.getElementById('testDate').valueAsDate = new Date();
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('testTime').value = `${hours}:${minutes}`;
+                
+                // Clear any validation styling
+                const invalidFields = document.querySelectorAll('.is-invalid');
+                invalidFields.forEach(field => field.classList.remove('is-invalid'));
+                
+                // Hide the modal
+                const resetModalInstance = bootstrap.Modal.getInstance(resetModal);
+                resetModalInstance.hide();
+            });
+        }
+        
+        // Show the modal
+        const resetModalInstance = new bootstrap.Modal(resetModal);
+        resetModalInstance.show();
+    }
+    
     // Reset form button
     document.getElementById('resetForm').addEventListener('click', function() {
-        if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
-            document.getElementById('hydroTestForm').reset();
-            
-            // Reset date and time to current
-            document.getElementById('testDate').valueAsDate = new Date();
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            document.getElementById('testTime').value = `${hours}:${minutes}`;
-            
-            // Clear any validation styling
-            const invalidFields = document.querySelectorAll('.is-invalid');
-            invalidFields.forEach(field => field.classList.remove('is-invalid'));
-        }
+        showResetConfirmation();
     });
 
     // Load previous report data if it exists in session storage
