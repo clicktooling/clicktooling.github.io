@@ -60,79 +60,124 @@ document.addEventListener('DOMContentLoaded', function() {
         const customerName = document.getElementById('customerName').value;
         if (!customerName) return;
         
-        const customerData = {
-            name: customerName,
-            email: document.getElementById('customerEmail').value,
-            phone: document.getElementById('customerPhone').value,
-            company: document.getElementById('customerCompany').value,
-            address: document.getElementById('testAddress').value,
-            city: document.getElementById('testCity').value,
-            state: document.getElementById('testState').value,
-            zip: document.getElementById('testZip').value,
-            lastUsed: new Date().toISOString()
-        };
+        const customerEmail = document.getElementById('customerEmail').value;
+        const customerPhone = document.getElementById('customerPhone').value;
+        const customerCompany = document.getElementById('customerCompany').value;
+        const testAddress = document.getElementById('testAddress').value;
+        const testCity = document.getElementById('testCity').value;
+        const testState = document.getElementById('testState').value;
+        const testZip = document.getElementById('testZip').value;
         
         // Check if customer already exists
-        const existingIndex = savedCustomers.findIndex(c => c.name === customerName);
+        const existingCustomerIndex = savedCustomers.findIndex(c => c.name === customerName);
         
-        if (existingIndex >= 0) {
+        if (existingCustomerIndex !== -1) {
             // Update existing customer
-            savedCustomers[existingIndex] = customerData;
+            savedCustomers[existingCustomerIndex] = {
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone,
+                company: customerCompany,
+                address: testAddress,
+                city: testCity,
+                state: testState,
+                zip: testZip
+            };
         } else {
             // Add new customer
-            savedCustomers.push(customerData);
-        }
-        
-        // Sort by most recently used
-        savedCustomers.sort((a, b) => new Date(b.lastUsed) - new Date(a.lastUsed));
-        
-        // Keep only the most recent 50 customers to prevent localStorage from getting too large
-        if (savedCustomers.length > 50) {
-            savedCustomers = savedCustomers.slice(0, 50);
+            savedCustomers.push({
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone,
+                company: customerCompany,
+                address: testAddress,
+                city: testCity,
+                state: testState,
+                zip: testZip
+            });
         }
         
         // Save to localStorage
         localStorage.setItem('savedCustomers', JSON.stringify(savedCustomers));
         
-        // Update the datalist
+        // Update datalist
         updateCustomerDatalist();
     }
 
-    // Initialize modal
-    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+    // Initialize modals with accessibility options
+    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'), {
+        backdrop: true,
+        keyboard: true,
+        focus: true
+    });
+    const invoiceModal = new bootstrap.Modal(document.getElementById('invoiceModal'), {
+        backdrop: true,
+        keyboard: true,
+        focus: true
+    });
+    
+    // Fix modal accessibility issues with aria-hidden
+    function setupModalAccessibility(modalId) {
+        const modalElement = document.getElementById(modalId);
+        
+        // Remove aria-hidden immediately when shown
+        modalElement.addEventListener('shown.bs.modal', function() {
+            this.removeAttribute('aria-hidden');
+        });
+        
+        // Use MutationObserver to prevent aria-hidden from being added
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && 
+                    mutation.attributeName === 'aria-hidden' && 
+                    modalElement.getAttribute('aria-hidden') === 'true' && 
+                    modalElement.style.display === 'block') {
+                    modalElement.removeAttribute('aria-hidden');
+                }
+            });
+        });
+        
+        observer.observe(modalElement, { attributes: true });
+        
+        // Also handle when the modal is about to be shown
+        modalElement.addEventListener('show.bs.modal', function() {
+            setTimeout(() => {
+                if (this.getAttribute('aria-hidden') === 'true') {
+                    this.removeAttribute('aria-hidden');
+                }
+            }, 0);
+        });
+    }
+    
+    // Set up accessibility fixes for both modals
+    setupModalAccessibility('previewModal');
+    setupModalAccessibility('invoiceModal');
     
     // Generate unique report ID
     function generateReportId() {
-        return 'HYDRO-' + Date.now().toString(36).toUpperCase() + 
-               Math.random().toString(36).substring(2, 7).toUpperCase();
+        const timestamp = Date.now().toString();
+        return 'RPT-' + timestamp.substring(timestamp.length - 8);
     }
-
+    
     // Format date for display
     function formatDate(dateString) {
+        if (!dateString) return '';
+        
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
     }
-
+    
     // Format date and time together
     function formatDateTime(dateString, timeString) {
-        const date = new Date(dateString);
-        const [hours, minutes] = timeString.split(':');
-        date.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+        if (!dateString) return '';
         
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        const date = new Date(dateString);
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        const formattedDate = date.toLocaleDateString('en-US', options);
+        
+        return `${formattedDate} at ${timeString}`;
     }
-
-    // No longer using QR code generation
 
     // Populate report preview with form data
     function populateReportPreview() {
@@ -172,14 +217,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // Format test result display
         let resultDisplay = '';
         if (testResult === 'pass') {
-            resultDisplay = '<span class="text-success">PASS</span> - No leaks or pressure loss detected';
+            resultDisplay = '<span class="report-pass">PASS</span> - No leaks or pressure loss detected';
         } else {
-            resultDisplay = '<span class="text-danger">FAIL</span> - Leaks or pressure loss detected';
+            resultDisplay = '<span class="report-fail">FAIL</span> - Leaks or pressure loss detected';
         }
         
         // Clone the template
         const template = document.getElementById('reportTemplate').cloneNode(true);
         template.style.display = 'block';
+        
+        // Preload the logo to ensure it's visible
+        const logoImg = template.querySelector('#companyLogo');
+        if (logoImg) {
+            logoImg.src = 'img/logo-wide.png';
+            logoImg.style.display = 'block';
+        }
         
         // Populate the template with data
         template.querySelector('#reportDate').textContent = formatDate(testDate);
@@ -191,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
         template.querySelector('#reportAddress').textContent = testAddress;
         template.querySelector('#reportCityStateZip').textContent = `${testCity}, ${testState} ${testZip}`;
         
-        template.querySelector('#reportDateTime').textContent = formatDateTime(testDate, testTime);
+        template.querySelector('#reportTestDate').textContent = formatDate(testDate);
         template.querySelector('#reportTestDuration').textContent = testDuration;
         template.querySelector('#reportSystemTested').textContent = systemTested;
         template.querySelector('#reportTestMethod').textContent = testMethod;
@@ -203,8 +255,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         template.querySelector('#reportCertification').textContent = certification;
         
-        // No longer using QR code generation
-        
         // Clear previous preview and add the new one
         const previewContainer = document.getElementById('reportPreview');
         previewContainer.innerHTML = '';
@@ -213,6 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Store report data in session storage
         const reportData = {
             reportId: reportId,
+            generatedTimestamp: generatedTimestamp,
             customerName: customerName,
             customerEmail: customerEmail,
             customerPhone: customerPhone,
@@ -230,8 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
             testResult: testResult,
             conclusion: conclusion,
             testNotes: testNotes,
-            certification: certification,
-            generatedTimestamp: generatedTimestamp
+            certification: certification
         };
         
         sessionStorage.setItem('currentReport', JSON.stringify(reportData));
@@ -268,16 +318,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return valid;
     }
 
-    // Generate PDF directly
-    document.getElementById('generatePDF').addEventListener('click', function() {
-        if (!validateForm()) return;
-        
-        // Save customer data when generating PDF
-        saveCustomerData();
-        
-        const reportData = populateReportPreview();
-        generatePDF(reportData);
-    });
+    // Note: Generate PDF button has been removed from the interface
+    // PDF generation is now handled through the Download PDF button in the preview modal
 
     // Generate PDF from preview modal
     document.getElementById('downloadPDF').addEventListener('click', function() {
@@ -285,70 +327,224 @@ document.addEventListener('DOMContentLoaded', function() {
         generatePDF(reportData);
     });
 
-    // Generate PDF function
-    function generatePDF(reportData) {
-        const reportElement = document.getElementById('reportPreview').cloneNode(true);
+    // Generate invoice button
+    document.getElementById('generateInvoice').addEventListener('click', function() {
+        if (!validateForm()) return;
+
+        // Save customer data when generating invoice
+        saveCustomerData();
+
+        generateInvoicePreview();
+        invoiceModal.show();
+    });
+
+    // Download invoice PDF
+    document.getElementById('downloadInvoice').addEventListener('click', function() {
+        generateInvoicePDF();
+    });
+
+    // Generate invoice number
+    function generateInvoiceNumber() {
+        const timestamp = Date.now().toString();
+        return 'INV-' + timestamp.substring(timestamp.length - 8);
+    }
+
+    // Populate invoice preview
+    function generateInvoicePreview() {
+        // Get form values
+        const testAddress = document.getElementById('testAddress').value;
+        const testCity = document.getElementById('testCity').value;
+        const testState = document.getElementById('testState').value;
+        const testZip = document.getElementById('testZip').value;
+        const fullAddress = `${testAddress}, ${testCity}, ${testState} ${testZip}`;
+
+        // Generate invoice number and date
+        const invoiceNumber = generateInvoiceNumber();
+        const invoiceDate = formatDate(new Date());
+
+        // Clone the template
+        const template = document.getElementById('invoiceTemplate').cloneNode(true);
+        template.style.display = 'block';
+
+        // Populate the template with data
+        template.querySelector('#invoiceDate').textContent = invoiceDate;
+        template.querySelector('#invoiceNumber').textContent = invoiceNumber;
+        template.querySelector('#invoiceDescription').textContent = `Hydrostatic Test for ${fullAddress}`;
+
+        // Store invoice data in session storage
+        const invoiceData = {
+            invoiceNumber: invoiceNumber,
+            invoiceDate: invoiceDate,
+            customerAddress: fullAddress,
+            unitPrice: '$250.00',
+            total: '$250.00'
+        };
+
+        sessionStorage.setItem('currentInvoice', JSON.stringify(invoiceData));
+
+        // Clear previous preview and add the new one
+        const previewContainer = document.getElementById('invoicePreview');
+        previewContainer.innerHTML = '';
+        previewContainer.appendChild(template);
+
+        // Preload logo image to ensure it's in the browser cache
+        const logoImg = new Image();
+        logoImg.src = 'img/logo-wide.png';
         
-        // Ensure the element is visible for html2canvas
-        reportElement.style.display = 'block';
-        document.body.appendChild(reportElement);
+        return invoiceData;
+    }
+
+    // Generate invoice PDF function using HTML-to-Canvas-to-PDF approach
+    function generateInvoicePDF() {
+        // Create loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.style.position = 'fixed';
+        loadingIndicator.style.top = '50%';
+        loadingIndicator.style.left = '50%';
+        loadingIndicator.style.transform = 'translate(-50%, -50%)';
+        loadingIndicator.style.padding = '20px';
+        loadingIndicator.style.background = 'rgba(0,0,0,0.7)';
+        loadingIndicator.style.color = 'white';
+        loadingIndicator.style.borderRadius = '5px';
+        loadingIndicator.style.zIndex = '9999';
+        loadingIndicator.textContent = 'Generating invoice PDF...';
+        document.body.appendChild(loadingIndicator);
         
-        // Ensure logo is loaded before generating PDF
-        const logoImg = reportElement.querySelector('#companyLogo');
-        if (logoImg) {
-            logoImg.onload = function() {
-                generatePDFWithCanvas(reportElement, reportData);
-            };
+        try {
+            // Get the invoice element from the preview
+            const invoiceElement = document.getElementById('invoicePreview');
             
-            // If logo is already loaded or fails to load, proceed after a short delay
-            setTimeout(function() {
-                generatePDFWithCanvas(reportElement, reportData);
-            }, 500);
-        } else {
-            generatePDFWithCanvas(reportElement, reportData);
+            // Use html2canvas to convert the invoice to an image
+            html2canvas(invoiceElement, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true,
+                logging: false,
+                allowTaint: true
+            }).then(canvas => {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                
+                // Get invoice data for the filename
+                const invoiceData = JSON.parse(sessionStorage.getItem('currentInvoice'));
+                
+                // Get the image data from the canvas
+                const imgData = canvas.toDataURL('image/png');
+                
+                // Calculate dimensions to fit the page while maintaining aspect ratio
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const ratio = canvasWidth / canvasHeight;
+                
+                let imgWidth = pageWidth - 20; // 10mm margin on each side
+                let imgHeight = imgWidth / ratio;
+                
+                // If the height is too large, scale it down
+                if (imgHeight > pageHeight - 20) { // 10mm margin on top and bottom
+                    imgHeight = pageHeight - 20;
+                    imgWidth = imgHeight * ratio;
+                }
+                
+                // Center the image on the page
+                const x = (pageWidth - imgWidth) / 2;
+                const y = 10; // 10mm from top
+                
+                // Add the image to the PDF
+                pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+                
+                // Save the PDF
+                const fileName = `Click_Plumbing_Invoice_${invoiceData.invoiceNumber}.pdf`;
+                pdf.save(fileName);
+                
+                // Remove loading indicator
+                document.body.removeChild(loadingIndicator);
+            }).catch(error => {
+                console.error('Error generating invoice PDF:', error);
+                alert('There was an error generating the invoice PDF. Please try again.');
+                document.body.removeChild(loadingIndicator);
+            });
+        } catch (error) {
+            console.error('Error in invoice PDF generation process:', error);
+            alert('There was an error in the invoice PDF generation process. Please try again.');
+            document.body.removeChild(loadingIndicator);
         }
     }
     
-    // Helper function to generate PDF once logo is loaded
-    function generatePDFWithCanvas(reportElement, reportData) {
+    // Generate PDF function using HTML-to-Canvas-to-PDF approach
+    function generatePDF(reportData) {
+        // Create loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.style.position = 'fixed';
+        loadingIndicator.style.top = '50%';
+        loadingIndicator.style.left = '50%';
+        loadingIndicator.style.transform = 'translate(-50%, -50%)';
+        loadingIndicator.style.padding = '20px';
+        loadingIndicator.style.background = 'rgba(0,0,0,0.7)';
+        loadingIndicator.style.color = 'white';
+        loadingIndicator.style.borderRadius = '5px';
+        loadingIndicator.style.zIndex = '9999';
+        loadingIndicator.textContent = 'Generating report PDF...';
+        document.body.appendChild(loadingIndicator);
         
-        html2canvas(reportElement, {
-            scale: 2,
-            logging: false,
-            useCORS: true,
-            allowTaint: true,
-            imageTimeout: 2000
-        }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
+        try {
+            // Get the report element from the preview
+            const reportElement = document.getElementById('reportPreview');
             
-            // Create PDF
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-            
-            const imgX = (pdfWidth - imgWidth * ratio) / 2;
-            const imgY = 10;
-            
-            pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-            
-            // Download the PDF
-            const fileName = `Click_Plumbing_Hydrostatic_Test_Report_${reportData.reportId}.pdf`;
-            pdf.save(fileName);
-            
-            // Clean up
-            document.body.removeChild(reportElement);
-        }).catch(error => {
-            console.error('Error generating PDF:', error);
-            alert('There was an error generating the PDF. Please try again.');
-            document.body.removeChild(reportElement);
-        });
+            // Use html2canvas to convert the report to an image
+            html2canvas(reportElement, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true,
+                logging: false,
+                allowTaint: true
+            }).then(canvas => {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                
+                // Get the image data from the canvas
+                const imgData = canvas.toDataURL('image/png');
+                
+                // Calculate dimensions to fit the page while maintaining aspect ratio
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const ratio = canvasWidth / canvasHeight;
+                
+                let imgWidth = pageWidth - 20; // 10mm margin on each side
+                let imgHeight = imgWidth / ratio;
+                
+                // If the height is too large, scale it down
+                if (imgHeight > pageHeight - 20) { // 10mm margin on top and bottom
+                    imgHeight = pageHeight - 20;
+                    imgWidth = imgHeight * ratio;
+                }
+                
+                // Center the image on the page
+                const x = (pageWidth - imgWidth) / 2;
+                const y = 10; // 10mm from top
+                
+                // Add the image to the PDF
+                pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+                
+                // Save the PDF
+                const fileName = `Click_Plumbing_Hydrostatic_Test_Report_${reportData.reportId}.pdf`;
+                pdf.save(fileName);
+                
+                // Remove loading indicator
+                document.body.removeChild(loadingIndicator);
+            }).catch(error => {
+                console.error('Error generating PDF:', error);
+                alert('There was an error generating the PDF. Please try again.');
+                document.body.removeChild(loadingIndicator);
+            });
+        } catch (error) {
+            console.error('Error in PDF generation process:', error);
+            alert('There was an error in the PDF generation process. Please try again.');
+            document.body.removeChild(loadingIndicator);
+        }
     }
-
+    
     // Custom confirmation modal for reset form
     function showResetConfirmation() {
         // Create modal elements if they don't exist
@@ -360,7 +556,8 @@ document.addEventListener('DOMContentLoaded', function() {
             resetModal.className = 'modal fade';
             resetModal.setAttribute('tabindex', '-1');
             resetModal.setAttribute('aria-labelledby', 'resetConfirmModalLabel');
-            resetModal.setAttribute('aria-hidden', 'true');
+            resetModal.setAttribute('role', 'dialog');
+            resetModal.setAttribute('aria-modal', 'true');
             
             resetModal.innerHTML = `
                 <div class="modal-dialog modal-dialog-centered">
@@ -416,8 +613,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('resetForm').addEventListener('click', function() {
         showResetConfirmation();
     });
-
-    // Load previous report data if it exists in session storage
+    
+    // Check for saved report data
     const savedReport = sessionStorage.getItem('currentReport');
     if (savedReport) {
         const reportData = JSON.parse(savedReport);
@@ -438,8 +635,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('testDuration').value = reportData.testDuration || '';
         document.getElementById('testDescription').value = reportData.testDescription || '';
         
-        if (reportData.testResult) {
-            document.querySelector(`input[name="testResult"][value="${reportData.testResult}"]`).checked = true;
+        // Set test result radio button
+        if (reportData.testResult === 'pass') {
+            document.getElementById('testPass').checked = true;
+        } else {
+            document.getElementById('testFail').checked = true;
         }
         
         document.getElementById('testNotes').value = reportData.testNotes || '';
